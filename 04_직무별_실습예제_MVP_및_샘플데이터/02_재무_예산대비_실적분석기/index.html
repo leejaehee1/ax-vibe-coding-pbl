@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>부서별 예산 대비 실적(BVA) 편차 분석 및 이상 지출 탐지기</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    body { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+  <!-- 상단 헤더 -->
+  <header class="bg-slate-900 text-white shadow-md">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <span class="inline-block px-2.5 py-0.5 text-xs font-semibold bg-blue-600 rounded-full mb-1">재무/회계 권장 MVP</span>
+        <h1 class="text-xl font-bold tracking-tight">부서별 예산 대비 실적(BVA) 편차 분석 및 이상 지출 탐지기</h1>
+        <p class="text-xs text-slate-300 mt-0.5">월간 예산·실집행 내역 대조, 소진율 100% 초과 계정 자동 색출 및 소명 요청 리포트 도구</p>
+      </div>
+      <div class="flex items-center gap-2 no-print">
+        <label class="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition shadow-sm">
+          📂 CSV 파일 업로드
+          <input type="file" id="csvInput" accept=".csv" class="hidden" />
+        </label>
+        <button id="resetBtn" class="bg-slate-700 hover:bg-slate-600 text-slate-100 text-sm font-medium px-3.5 py-2 rounded-lg transition">
+          🔄 기본 샘플 복원
+        </button>
+        <button id="exportBtn" class="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-3.5 py-2 rounded-lg transition">
+          ⬇️ 분석결과 CSV 저장
+        </button>
+        <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-sm px-3 py-2 rounded-lg transition">
+          🖨️ 인쇄/PDF
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
+    <!-- KPI 요약 카드 4개 -->
+    <section id="kpiCards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></section>
+
+    <!-- 필터 바 & 임원 보고 자동 요약 -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- 좌측: 필터 + 자동 브리핑 -->
+      <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col justify-between space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-800 flex items-center gap-2">
+            <span>🔍 조건 필터 및 이상 항목 탐지</span>
+          </h2>
+          <div class="mt-3 grid grid-cols-2 gap-3 no-print">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">부서명 필터</label>
+              <select id="groupFilter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="ALL">전체 보기</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">상태 필터</label>
+              <select id="statusFilter" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <option value="ALL">전체 상태</option>
+                <option value="ALERT">🚨 점검/경고 항목만</option>
+                <option value="OK">✅ 정상/우수 항목만</option>
+              </select>
+            </div>
+          </div>
+          
+        </div>
+
+        <!-- 자동 생성 브리핑 박스 -->
+        <div class="bg-slate-900 text-slate-100 rounded-lg p-4 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-blue-400">🤖 AI 자동 생성 3줄 보고 브리핑</span>
+            <button id="copyBriefBtn" class="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-white no-print">📋 문구 복사</button>
+          </div>
+          <pre id="briefingText" class="text-xs leading-relaxed whitespace-pre-wrap font-sans text-slate-200"></pre>
+        </div>
+      </div>
+
+      <!-- 우측: 시각화 차트 -->
+      <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-bold text-slate-800">📊 부서·계정별 편성 예산 vs 실제 집행액 비교 (적색: 예산 초과)</h2>
+          <span class="text-xs text-slate-400">단위: 백만원</span>
+        </div>
+        <div class="relative h-72 w-full">
+          <canvas id="mainChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- 상세 데이터 테이블 -->
+    <section class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h2 class="text-base font-bold text-slate-800">📋 상세 데이터 및 자동 계산 결과</h2>
+        <span id="rowCountText" class="text-xs font-medium text-slate-500"></span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead id="tableHead" class="bg-slate-100 text-slate-600 text-xs uppercase border-b border-slate-200"></thead>
+          <tbody id="tableBody" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const CONFIG = {"folder": "02_재무_예산대비_실적분석기", "badge": "재무/회계 권장 MVP", "title": "부서별 예산 대비 실적(BVA) 편차 분석 및 이상 지출 탐지기", "subtitle": "월간 예산·실집행 내역 대조, 소진율 100% 초과 계정 자동 색출 및 소명 요청 리포트 도구", "mode": "BVA", "unit": "백만원", "group_label": "부서명", "group_col": "부서명", "item_col": "계정과목", "col_a": "예산액(백만원)", "col_b": "실집행액(백만원)", "kpi1_label": "편성 예산 합계", "kpi2_label": "실제 집행 합계", "kpi3_label": "평균 예산 소진율", "calc1_label": "편차(실적-예산)", "calc2_label": "예산소진율(%)", "chart_title": "부서·계정별 편성 예산 vs 실제 집행액 비교 (적색: 예산 초과)", "headers": ["연월", "부서명", "계정과목", "예산액(백만원)", "실집행액(백만원)", "전월집행액(백만원)", "담당자"], "default_rows": [{"연월": "2026-10", "부서명": "생산기술팀", "계정과목": "설비유지보수비", "예산액(백만원)": 180, "실집행액(백만원)": 215, "전월집행액(백만원)": 165, "담당자": "김철수"}, {"연월": "2026-10", "부서명": "생산기술팀", "계정과목": "소모품비", "예산액(백만원)": 60, "실집행액(백만원)": 54, "전월집행액(백만원)": 58, "담당자": "김철수"}, {"연월": "2026-10", "부서명": "글로벌마케팅팀", "계정과목": "해외전시회참가비", "예산액(백만원)": 240, "실집행액(백만원)": 278, "전월집행액(백만원)": 120, "담당자": "박영희"}, {"연월": "2026-10", "부서명": "글로벌마케팅팀", "계정과목": "디지털광고선전비", "예산액(백만원)": 150, "실집행액(백만원)": 142, "전월집행액(백만원)": 148, "담당자": "박영희"}, {"연월": "2026-10", "부서명": "R&D선행연구팀", "계정과목": "시제품제작비", "예산액(백만원)": 320, "실집행액(백만원)": 368, "전월집행액(백만원)": 290, "담당자": "이민호"}, {"연월": "2026-10", "부서명": "R&D선행연구팀", "계정과목": "외주용역비", "예산액(백만원)": 200, "실집행액(백만원)": 185, "전월집행액(백만원)": 195, "담당자": "이민호"}, {"연월": "2026-10", "부서명": "국내영업1팀", "계정과목": "물류운반비", "예산액(백만원)": 130, "실집행액(백만원)": 149, "전월집행액(백만원)": 128, "담당자": "최지훈"}]};
+    let currentRows = JSON.parse(JSON.stringify(CONFIG.default_rows));
+    let chartInstance = null;
+
+    function parseNum(v) {
+      if (typeof v === 'number') return v;
+      if (!v) return 0;
+      const cleaned = String(v).replace(/[^0-9.-]/g, '');
+      const n = parseFloat(cleaned);
+      return isNaN(n) ? 0 : n;
+    }
+
+    function fmtNum(n, digits = 0) {
+      return Number(n || 0).toLocaleString('ko-KR', {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
+      });
+    }
+
+    function enrichRow(row) {
+      const a = parseNum(row[CONFIG.col_a]);
+      const b = parseNum(row[CONFIG.col_b]);
+      const diff = b - a;
+      const ratio = a !== 0 ? (b / a) * 100 : 0;
+      let isAlert = false;
+      let statusLabel = '정상';
+      if (CONFIG.mode === 'BVA') {
+        // 예산(a) 대비 실집행(b): 100% 초과 시 경고
+        isAlert = ratio > 100;
+        statusLabel = isAlert ? '🚨 예산초과' : (ratio >= 90 ? '⚠️ 소진주의' : '✅ 적정');
+      } else if (CONFIG.mode === 'ROI') {
+        // 비용(a) 대비 매출(b): ROAS 250% 미만 시 경고
+        isAlert = ratio < 250;
+        statusLabel = isAlert ? '🚨 저효율점검' : '✅ 고효율';
+      } else if (CONFIG.mode === 'QUOTE') {
+        // 표준단가(a), 제조원가(b), 시뮬레이션 할인율 적용
+        const discSlider = document.getElementById('simDiscSlider');
+        const extraDisc = discSlider ? parseNum(discSlider.value) : 0;
+        const qtyInput = document.getElementById('simQtyInput');
+        const qty = qtyInput ? Math.max(1, parseNum(qtyInput.value)) : 10;
+        const sellUnit = a * (1 - extraDisc / 100);
+        const marginRate = sellUnit > 0 ? ((sellUnit - b) / sellUnit) * 100 : 0;
+        const minMargin = parseNum(row['최소승인마진율(%)']);
+        isAlert = marginRate < minMargin;
+        statusLabel = isAlert ? '🚨 승인필요(마진미달)' : '✅ 즉시발행가능';
+        return {
+          ...row,
+          _a: a * qty,
+          _b: sellUnit * qty,
+          _diff: (sellUnit - b) * qty,
+          _ratio: marginRate,
+          _isAlert: isAlert,
+          _statusLabel: statusLabel,
+          _calc1: fmtNum(sellUnit, 1) + '만원',
+          _calc2: fmtNum((sellUnit - b) * qty, 0) + '만원',
+          _calc3: fmtNum(marginRate, 1) + '%'
+        };
+      } else {
+        // 목표(a) 대비 실적(b): 95% 미만 시 경고
+        isAlert = ratio < 95;
+        statusLabel = isAlert ? '🚨 미달성점검' : (ratio >= 100 ? '✅ 목표초과달성' : '⚠️ 근접(95%+)');
+      }
+      return {
+        ...row,
+        _a: a,
+        _b: b,
+        _diff: diff,
+        _ratio: ratio,
+        _isAlert: isAlert,
+        _statusLabel: statusLabel,
+        _calc1: (diff >= 0 ? '+' : '') + fmtNum(diff, 1),
+        _calc2: fmtNum(ratio, 1) + '%'
+      };
+    }
+
+    function populateGroupFilter(rows) {
+      const select = document.getElementById('groupFilter');
+      const currentVal = select.value;
+      const groups = Array.from(new Set(rows.map(r => r[CONFIG.group_col]).filter(Boolean)));
+      select.innerHTML = '<option value="ALL">전체 보기</option>' +
+        groups.map(g => `<option value="${g}">${g}</option>`).join('');
+      if (groups.includes(currentVal)) select.value = currentVal;
+    }
+
+    function renderAll() {
+      const groupVal = document.getElementById('groupFilter').value;
+      const statusVal = document.getElementById('statusFilter').value;
+      const enriched = currentRows.map(enrichRow);
+
+      const filtered = enriched.filter(r => {
+        if (groupVal !== 'ALL' && r[CONFIG.group_col] !== groupVal) return false;
+        if (statusVal === 'ALERT' && !r._isAlert) return false;
+        if (statusVal === 'OK' && r._isAlert) return false;
+        return true;
+      });
+
+      // KPI 집계
+      const sumA = filtered.reduce((s, r) => s + r._a, 0);
+      const sumB = filtered.reduce((s, r) => s + r._b, 0);
+      const avgRatio = sumA !== 0 ? (sumB / sumA) * 100 : 0;
+      const alertCount = filtered.filter(r => r._isAlert).length;
+
+      const kpiHtml = [
+        { label: CONFIG.kpi1_label, val: fmtNum(sumA, 0) + ' ' + CONFIG.unit, sub: '현재 필터 기준 합계', color: 'border-slate-300' },
+        { label: CONFIG.kpi2_label, val: fmtNum(sumB, 0) + ' ' + CONFIG.unit, sub: '실제 집계 합계', color: 'border-blue-500' },
+        { label: CONFIG.kpi3_label, val: fmtNum(avgRatio, 1) + '%', sub: '종합 비율/효율', color: 'border-indigo-500' },
+        { label: '점검 필요(경고) 건수', val: alertCount + ' 건', sub: '전체 ' + filtered.length + '건 중', color: alertCount > 0 ? 'border-rose-500 bg-rose-50/40' : 'border-emerald-500' }
+      ].map(k => `
+        <div class="bg-white rounded-xl shadow-sm border-l-4 ${k.color} border border-slate-200 p-4">
+          <p class="text-xs font-semibold text-slate-500">${k.label}</p>
+          <p class="text-2xl font-extrabold text-slate-900 mt-1">${k.val}</p>
+          <p class="text-xs text-slate-400 mt-1">${k.sub}</p>
+        </div>
+      `).join('');
+      document.getElementById('kpiCards').innerHTML = kpiHtml;
+
+      // 브리핑 생성
+      const alerts = filtered.filter(r => r._isAlert);
+      const topAlertNames = alerts.slice(0, 3).map(r => `${r[CONFIG.group_col]}(${r[CONFIG.item_col]})`).join(', ') || '없음';
+      const briefLines = [
+        `1. [종합 현황] 조회 대상 총 ${filtered.length}건의 ${CONFIG.kpi1_label} 합계는 ${fmtNum(sumA)}${CONFIG.unit}, ${CONFIG.kpi2_label} 합계는 ${fmtNum(sumB)}${CONFIG.unit} (종합 ${fmtNum(avgRatio, 1)}%) 입니다.`,
+        `2. [핵심 이상항목] 기준 임계치를 벗어난 중점 점검 항목은 총 ${alertCount}건이며, 주요 대상은 [${topAlertNames}] 입니다.`,
+        `3. [권고 조치] 점검 대상 항목에 대한 원인 분석 및 차월 계획 조정을 즉시 권고합니다.`
+      ];
+      document.getElementById('briefingText').textContent = briefLines.join('\n');
+
+      // 테이블 렌더링
+      const cols = CONFIG.headers;
+      document.getElementById('tableHead').innerHTML = '<tr>' +
+        cols.map(c => `<th class="px-4 py-3 font-semibold">${c}</th>`).join('') +
+        `<th class="px-4 py-3 font-semibold text-right">${CONFIG.calc1_label}</th>` +
+        `<th class="px-4 py-3 font-semibold text-right">${CONFIG.calc2_label}</th>` +
+        `<th class="px-4 py-3 font-semibold text-center">판정상태</th>` +
+        '</tr>';
+
+      document.getElementById('tableBody').innerHTML = filtered.map(r => `
+        <tr class="${r._isAlert ? 'bg-rose-50/70 hover:bg-rose-100/60' : 'hover:bg-slate-50'} transition">
+          ${cols.map(c => `<td class="px-4 py-2.5 whitespace-nowrap">${r[c] ?? ''}</td>`).join('')}
+          <td class="px-4 py-2.5 text-right font-mono font-semibold">${r._calc1}</td>
+          <td class="px-4 py-2.5 text-right font-mono font-bold ${r._isAlert ? 'text-rose-600' : 'text-blue-700'}">${r._calc3 || r._calc2}</td>
+          <td class="px-4 py-2.5 text-center">
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold ${r._isAlert ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">
+              ${r._statusLabel}
+            </span>
+          </td>
+        </tr>
+      `).join('');
+      document.getElementById('rowCountText').textContent = `총 ${filtered.length}개 항목 표시 중`;
+
+      // 차트 업데이트
+      const ctx = document.getElementById('mainChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+      const labels = filtered.map(r => `${r[CONFIG.group_col]}-${r[CONFIG.item_col]}`);
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: CONFIG.col_a,
+              data: filtered.map(r => r._a),
+              backgroundColor: 'rgba(148, 163, 184, 0.7)',
+              borderRadius: 5
+            },
+            {
+              label: CONFIG.col_b,
+              data: filtered.map(r => r._b),
+              backgroundColor: filtered.map(r => r._isAlert ? 'rgba(225, 29, 72, 0.85)' : 'rgba(37, 99, 235, 0.85)'),
+              borderRadius: 5
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'top' } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+
+    // CSV 파서 (UTF-8 및 EUC-KR 자동 감지)
+    function parseCSVText(text) {
+      const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim() !== '');
+      if (lines.length < 2) return [];
+      const headers = lines[0].replace(/^\uFEFF/, '').split(',').map(h => h.trim());
+      return lines.slice(1).map(line => {
+        const vals = line.split(',').map(v => v.trim());
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = vals[i] ?? '');
+        return obj;
+      });
+    }
+
+    document.getElementById('csvInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const buffer = ev.target.result;
+        let text = new TextDecoder('utf-8').decode(buffer);
+        if (text.includes('\uFFFD')) {
+          text = new TextDecoder('euc-kr').decode(buffer);
+        }
+        const parsed = parseCSVText(text);
+        if (parsed.length > 0) {
+          currentRows = parsed;
+          populateGroupFilter(currentRows);
+          renderAll();
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      currentRows = JSON.parse(JSON.stringify(CONFIG.default_rows));
+      populateGroupFilter(currentRows);
+      document.getElementById('groupFilter').value = 'ALL';
+      document.getElementById('statusFilter').value = 'ALL';
+      renderAll();
+    });
+
+    document.getElementById('groupFilter').addEventListener('change', renderAll);
+    document.getElementById('statusFilter').addEventListener('change', renderAll);
+
+    document.getElementById('copyBriefBtn').addEventListener('click', () => {
+      navigator.clipboard.writeText(document.getElementById('briefingText').textContent);
+      const btn = document.getElementById('copyBriefBtn');
+      btn.textContent = '✅ 복사 완료!';
+      setTimeout(() => btn.textContent = '📋 문구 복사', 1500);
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      const enriched = currentRows.map(enrichRow);
+      const headers = [...CONFIG.headers, CONFIG.calc1_label, CONFIG.calc2_label, '판정상태'];
+      const csvRows = [
+        headers.join(','),
+        ...enriched.map(r => [
+          ...CONFIG.headers.map(h => r[h]),
+          String(r._calc1).replace(/,/g, ''),
+          String(r._calc3 || r._calc2).replace(/,/g, ''),
+          r._statusLabel
+        ].join(','))
+      ];
+      const blob = new Blob(['\uFEFF' + csvRows.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'analysis_result.csv';
+      a.click();
+    });
+
+    // 초기화
+    populateGroupFilter(currentRows);
+    renderAll();
+  </script>
+</body>
+</html>
