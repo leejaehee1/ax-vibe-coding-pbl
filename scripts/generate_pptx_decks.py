@@ -336,7 +336,7 @@ def build_deck(deck_meta, slides_data, pptx_path, pdf_path):
                 '</ul></div>'
                 for c in cards
             )
-            takeaway_html = f'<div class="takeaway">💡 <strong>핵심 포인트:</strong> {s["bottom_takeaway"]}</div>' if s.get("bottom_takeaway") else ''
+            takeaway_html = f'<div class="takeaway"><strong>핵심 포인트:</strong> {s["bottom_takeaway"]}</div>' if s.get("bottom_takeaway") else ''
             html_slides.append(f"""
             <div class="slide">
               <div class="header">
@@ -458,6 +458,7 @@ def build_deck(deck_meta, slides_data, pptx_path, pdf_path):
         subprocess.run([
             "/usr/local/bin/wkhtmltopdf",
             "--quiet",
+            "--disable-smart-shrinking",
             "--page-size", "A4",
             "--orientation", "Landscape",
             "--margin-top", "0mm",

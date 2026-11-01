@@ -37,6 +37,8 @@ Windows 교육장 PC 호환 표준 폰트(`맑은 고딕`, `Consolas`) 기반 Po
   - [📊 PPTX 다운로드](./02_강의교안_PPTX/DAY2_MVP_개발_디버깅_및_실전_멘토링.pptx) | [📕 PDF 슬라이드](./02_강의교안_PPTX/DAY2_MVP_개발_디버깅_및_실전_멘토링.pdf)
 - **DAY 3 (11/13 금, 4H) — 개인별 5분 시연 발표 · 전문가 피드백 및 현업 적용 Wrap-up**
   - [📊 PPTX 다운로드](./02_강의교안_PPTX/DAY3_MVP_시연발표_및_현업적용_WrapUp.pptx) | [📕 PDF 슬라이드](./02_강의교안_PPTX/DAY3_MVP_시연발표_및_현업적용_WrapUp.pdf)
+- **심화 모듈 (4H) — 도면 없이 만들면 불량이 납니다: 공장의 품질관리로 검증하는 바이브코딩**
+  - [📊 PPTX 다운로드](./02_강의교안_PPTX/심화_명세기반_바이브코딩_제조품질관리.pptx) | [📕 PDF 슬라이드](./02_강의교안_PPTX/심화_명세기반_바이브코딩_제조품질관리.pdf)
 
 ### 📋 [`03_수강생_배포용_템플릿/`](./03_수강생_배포용_템플릿/)
 - **01. 과제 정의서 및 MVP 범위 설계서** — [DOCX](./03_수강생_배포용_템플릿/01_과제정의서_및_MVP설계_템플릿.docx) | [PDF](./03_수강생_배포용_템플릿/01_과제정의서_및_MVP설계_템플릿.pdf) | [MD](./03_수강생_배포용_템플릿/01_과제정의서_및_MVP설계_템플릿.md)
@@ -66,4 +68,5 @@ python3 scripts/generate_mvp_samples.py
 python3 scripts/generate_mvp_htmls.py
 uv run --with python-docx --with openpyxl python3 scripts/generate_docx_xlsx_pdf.py
 uv run --with python-pptx python3 scripts/generate_pptx_decks.py
+uv run --with python-pptx python3 scripts/generate_advanced_deck.py
 ```
