@@ -34,6 +34,7 @@ def shade_cell(cell, hex_color):
 
 def clean_md_inline(text):
     text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    text = re.sub(r'(?<!\*)\*([^*\n]+)\*(?!\*)', r'\1', text)
     text = re.sub(r'`(.*?)`', r'\1', text)
     text = text.replace('<br>', '\n')
     return text.strip()
@@ -191,6 +192,7 @@ def md_to_pdf(md_path, pdf_path, doc_title):
 
     def format_inline(t):
         t = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', t)
+        t = re.sub(r'(?<!\*)\*([^*\n]+)\*(?!\*)', r'<em>\1</em>', t)
         t = re.sub(r'`(.*?)`', r'<code>\1</code>', t)
         return t
 
@@ -607,6 +609,12 @@ if __name__ == "__main__":
             os.path.join(ROOT, "01_커리큘럼_및_운영계획/대기업_제조사_AX_핵심인재_바이브코딩_커리큘럼.docx"),
             os.path.join(ROOT, "01_커리큘럼_및_운영계획/대기업_제조사_AX_핵심인재_바이브코딩_커리큘럼.pdf"),
             "대기업 제조사 AX 핵심인재 양성 교육 커리큘럼"
+        ),
+        (
+            os.path.join(ROOT, "03_수강생_배포용_템플릿/00_Windows_PC_실전_세팅_가이드.md"),
+            os.path.join(ROOT, "03_수강생_배포용_템플릿/00_Windows_PC_실전_세팅_가이드.docx"),
+            os.path.join(ROOT, "03_수강생_배포용_템플릿/00_Windows_PC_실전_세팅_가이드.pdf"),
+            "보안 정책 적용 Windows 업무용 PC 실전 세팅 매뉴얼"
         ),
         (
             os.path.join(ROOT, "03_수강생_배포용_템플릿/01_과제정의서_및_MVP설계_템플릿.md"),
